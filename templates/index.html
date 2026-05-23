@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surgical Vision AI | Instrument Search & Classification Dashboard</title>
+    <meta name="description" content="AI-powered classification and search engine for surgical instruments using deep feature embeddings.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Premium Header -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="pulse-icon">
+                    <span class="ring"></span>
+                    <span class="dot"></span>
+                </div>
+                <h1>SURGICAL<span>VISION.AI</span></h1>
+            </div>
+            <div class="system-status">
+                <span class="status-indicator"></span>
+                <span class="status-text">Index Cached: 210 Instruments</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-container">
+        <!-- Classification Section -->
+        <section class="dashboard-grid">
+            
+            <!-- Left Panel: Upload & Controls -->
+            <div class="panel glass-panel upload-panel">
+                <div class="panel-header">
+                    <i data-lucide="scan-eye" class="icon-cyan"></i>
+                    <h2>Instrument Scanner</h2>
+                </div>
+                <p class="panel-description">Upload an image of a surgical tool to match it against our high-fidelity catalog index.</p>
+
+                <!-- Drag & Drop Dropzone -->
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept="image/*" class="file-input">
+                    <div class="dropzone-content" id="dropzoneContent">
+                        <i data-lucide="upload-cloud" class="upload-icon"></i>
+                        <h3>Drag & Drop Instrument Image</h3>
+                        <p>Supports PNG, JPG, JPEG up to 10MB</p>
+                        <button class="btn btn-secondary select-btn">Browse Files</button>
+                    </div>
+                    <div class="dropzone-preview hidden" id="dropzonePreview">
+                        <img id="previewImg" src="" alt="Query Preview">
+                        <div class="scanner-bar" id="scannerBar"></div>
+                        <button class="remove-btn" id="removeBtn" title="Remove image">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sample Queries -->
+                <div class="samples-section">
+                    <span class="section-label">Or try a sample instrument:</span>
+                    <div class="samples-grid">
+                        <div class="sample-card" data-img="/dataset/processed/p02_r1_c5.png">
+                            <div class="sample-img-wrapper">
+                                <img src="/dataset/processed/p02_r1_c5.png" alt="Forceps (Curved)">
+                            </div>
+                            <span class="sample-name">Curved Forceps</span>
+                        </div>
+                        <div class="sample-card" data-img="/dataset/processed/p03_r0_c0.png">
+                            <div class="sample-img-wrapper">
+                                <img src="/dataset/processed/p03_r0_c0.png" alt="Crile-wood Needle Holder">
+                            </div>
+                            <span class="sample-name">Needle Holder</span>
+                        </div>
+                        <div class="sample-card" data-img="/dataset/processed/p04_r0_c0.png">
+                            <div class="sample-img-wrapper">
+                                <img src="/dataset/processed/p04_r0_c0.png" alt="Mayo Hegar TC">
+                            </div>
+                            <span class="sample-name">Mayo Hegar</span>
+                        </div>
+                        <div class="sample-card" data-img="/dataset/processed/p05_r0_c0.png">
+                            <div class="sample-img-wrapper">
+                                <img src="/dataset/processed/p05_r0_c0.png" alt="Adson Tooth Forceps">
+                            </div>
+                            <span class="sample-name">Adson Tooth</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Results & Match analysis -->
+            <div class="panel glass-panel results-panel">
+                <div class="panel-header">
+                    <i data-lucide="bar-chart-3" class="icon-cyan"></i>
+                    <h2>Matching Analysis</h2>
+                </div>
+
+                <!-- Awaiting Query State -->
+                <div class="results-state" id="stateAwaiting">
+                    <div class="waiting-graphic">
+                        <div class="radar">
+                            <div class="radar-line"></div>
+                        </div>
+                    </div>
+                    <h3>Awaiting Instrument Input</h3>
+                    <p>Provide an image on the left to activate the supervised ResNet-18 instrument classifier.</p>
+                </div>
+
+                <!-- Loading State -->
+                <div class="results-state hidden" id="stateLoading">
+                    <div class="spinner">
+                        <div class="double-bounce1"></div>
+                        <div class="double-bounce2"></div>
+                    </div>
+                    <h3>Classifying Instrument...</h3>
+                    <p>Predicting instrument class using fine-tuned ResNet-18 supervised model...</p>
+                </div>
+
+                <!-- Results Active State -->
+                <div class="results-active hidden" id="resultsActive">
+                    <!-- Top Match Hero Banner -->
+                    <div class="hero-match" id="heroMatch">
+                        <div class="side-by-side">
+                            <div class="compare-box">
+                                <span class="badge">QUERY</span>
+                                <div class="image-container">
+                                    <img id="queryHeroImg" src="" alt="Query">
+                                </div>
+                            </div>
+                            <div class="vs-divider">
+                                <span>VS</span>
+                            </div>
+                            <div class="compare-box">
+                                <span class="badge badge-success" id="heroMatchPct">98.5% MATCH</span>
+                                <div class="image-container">
+                                    <img id="catalogHeroImg" src="" alt="Catalog Best Match">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="hero-details">
+                            <h3 id="heroMatchName">Tissue Forceps (Straight)</h3>
+                            <div class="hero-meta">
+                                <span id="heroMatchSku">SKU: 93131</span>
+                                <span id="heroMatchSize">Size: 6” & 8”</span>
+                                <span id="heroMatchPage">Page: 2</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rank Matches List -->
+                    <div class="matches-list-section">
+                        <h4>Subsequent Matches (Ranked by Classification Confidence)</h4>
+                        <div class="matches-list" id="matchesList">
+                            <!-- Cards populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Catalog Section -->
+        <section class="catalog-section">
+            <div class="section-header">
+                <div class="title-area">
+                    <i data-lucide="database" class="icon-cyan"></i>
+                    <h2>Catalog Database</h2>
+                </div>
+                <div class="search-box-wrapper">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" id="catalogSearch" placeholder="Search catalog by name, SKU, or category...">
+                </div>
+            </div>
+
+            <!-- Category Tabs -->
+            <div class="category-tabs" id="categoryTabs">
+                <button class="tab-btn active" data-category="all">All Items</button>
+                <button class="tab-btn" data-category="Surgical Forceps">Forceps</button>
+                <button class="tab-btn" data-category="Surgical Scissors">Scissors</button>
+                <button class="tab-btn" data-category="Surgical Retractors">Retractors</button>
+                <button class="tab-btn" data-category="Clamps">Clamps</button>
+            </div>
+
+            <!-- Grid of items -->
+            <div class="catalog-grid" id="catalogGrid">
+                <!-- Populated dynamically -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Dialog for Instrument Detailed View -->
+    <dialog id="detailsDialog" class="glass-dialog">
+        <div class="dialog-content">
+            <button class="dialog-close-btn" id="dialogCloseBtn">
+                <i data-lucide="x"></i>
+            </button>
+            <div class="dialog-grid">
+                <div class="dialog-image-box">
+                    <img id="dialogImg" src="" alt="Instrument Detail">
+                </div>
+                <div class="dialog-info-box">
+                    <div class="dialog-header-meta">
+                        <span class="dialog-category" id="dialogCategory">Surgical Forceps</span>
+                        <span class="dialog-sku" id="dialogSku">SKU: 93131</span>
+                    </div>
+                    <h2 id="dialogName">Tissue Forceps (Straight)</h2>
+                    
+                    <div class="spec-table">
+                        <div class="spec-row">
+                            <span class="spec-label">Available Sizes</span>
+                            <span class="spec-value" id="dialogSizes">5", 6", 8" & 10"</span>
+                        </div>
+                        <div class="spec-row">
+                            <span class="spec-label">Catalog Reference Page</span>
+                            <span class="spec-value" id="dialogPage">Page 2</span>
+                        </div>
+                        <div class="spec-row">
+                            <span class="spec-label">Grid Location ID</span>
+                            <span class="spec-value" id="dialogGridId">p02_r0_c0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="spec-description">
+                        <h3>Medical Standard Details</h3>
+                        <p>This surgical instrument is precision-crafted from high-grade German steel, designed to meet rigorous standards for general surgical workflows. Features standard ribbed handle grips and finely ground tip alignments for precise tissue manipulation.</p>
+                    </div>
+
+                    <button class="btn btn-primary" id="dialogSearchBtn">
+                        <i data-lucide="search-code"></i> Query Similar Items
+                    </button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
+    <footer class="app-footer">
+        <p>&copy; 2026 Surgical Vision AI. Supervised ResNet-18 Deep Learning Classifier. All Rights Reserved.</p>
+    </footer>
+
+    <!-- Initialize Lucide icons and script -->
+    <script>
+        // Set basic icons early, full binding done in script.js
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+    </script>
+    <script src="/static/script.js"></script>
+</body>
+</html>
