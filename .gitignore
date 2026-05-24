@@ -20,3 +20,7 @@ env/
 
 # Intermediate embeddings cache
 dataset/embeddings_cache.pkl
+
+# Large model weights
+dataset/*.pt
+

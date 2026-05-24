@@ -6,7 +6,7 @@ from PIL import Image
 
 PROJECT_DIR = Path("/Users/anika/Desktop/surgical_instrument_classifier")
 engine = SurgicalInstrumentSearchEngine(
-    cache_path=str(PROJECT_DIR / "dataset/classifier_resnet18.pt"),
+    cache_path=str(PROJECT_DIR / "dataset/classifier_resnet50.pt"),
     metadata_path=str(PROJECT_DIR / "dataset/metadata.csv"),
     mapping_path=str(PROJECT_DIR / "dataset/class_mapping.json")
 )
