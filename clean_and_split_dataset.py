@@ -52,8 +52,9 @@ def clean_and_split():
             # Load raw catalog image
             img = Image.open(raw_img_path)
             
-            # Extract crops
-            full_body, jaw, inset = crop_multiscale_regions(img)
+            # Extract crops with category-aware logic
+            is_rubber = id_str.startswith("rub_")
+            full_body, jaw, inset = crop_multiscale_regions(img, is_rubber=is_rubber)
             
             # Paths to save
             full_body_name = f"{id_str}_full.png"

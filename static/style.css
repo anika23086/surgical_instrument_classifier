@@ -1169,6 +1169,55 @@ dialog[open]::backdrop {
     margin-top: auto;
 }
 
+/* Dynamic Parent Catalog Badges */
+.hero-catalogs, .dialog-catalogs-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+}
+
+.dialog-catalogs-section h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+}
+
+.catalogs-grid, .dialog-catalogs-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.catalog-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(0, 221, 255, 0.05);
+    border: 1px solid rgba(0, 221, 255, 0.15);
+    color: var(--accent-cyan);
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: var(--transition-standard);
+    box-shadow: 0 2px 8px rgba(0, 221, 255, 0.05);
+}
+
+.catalog-badge:hover {
+    background: rgba(0, 221, 255, 0.1);
+    border-color: rgba(0, 221, 255, 0.35);
+    transform: translateY(-1px);
+}
+
+.catalog-badge i {
+    width: 13px;
+    height: 13px;
+}
+
 /* Footer Section */
 .app-footer {
     border-top: 1px solid var(--border-color);

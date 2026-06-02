@@ -35,10 +35,11 @@ class SurgicalInstrumentSearchEngine:
     def load_metadata(self):
         if self.metadata_path.exists():
             self.metadata_df = pd.read_csv(self.metadata_path).fillna("")
-            # Build high-performance lookup dictionary
-            for _, row in self.metadata_df.iterrows():
+            # Build high-performance lookup dictionary deduplicated by unique ID (keep first occurrence)
+            df_unique = self.metadata_df.drop_duplicates(subset=['id'], keep='first')
+            for _, row in df_unique.iterrows():
                 self.metadata_lookup[row['id']] = row.to_dict()
-            print(f"Loaded metadata database containing {len(self.metadata_df)} items.")
+            print(f"Loaded metadata database containing {len(self.metadata_df)} items (lookup index: {len(self.metadata_lookup)} unique classes).")
         else:
             print("Warning: metadata.csv not found.")
 

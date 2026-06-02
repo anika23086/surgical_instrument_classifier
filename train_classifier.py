@@ -84,12 +84,13 @@ def train_model():
         sys.exit(1)
 
     metadata_df = pd.read_csv(METADATA_PATH)
-    num_classes = len(metadata_df)
-    print(f"Target catalog size: {num_classes} instruments.", flush=True)
-
-    # Consistent class index mapping
-    classes = sorted(metadata_df['id'].tolist())
+    
+    # Consistent unique class index mapping
+    classes = sorted(list(set(metadata_df['id'].tolist())))
+    num_classes = len(classes)
     class_to_idx = {cls_id: idx for idx, cls_id in enumerate(classes)}
+    
+    print(f"Target catalog size: {num_classes} unique instruments (total database rows: {len(metadata_df)}).", flush=True)
 
     # === Instantiate Pretrained ResNet-50 ===
     print("Loading pretrained Microsoft ResNet-50 backbone...", flush=True)
@@ -104,16 +105,18 @@ def train_model():
     model.eval()
 
     num_augmentations = 20  # 20 synthetic variations per base image
+    total_database_rows = len(metadata_df)
+    total_samples = total_database_rows * num_augmentations
+    
     print(f"\n{'='*60}", flush=True)
     print(f"STAGE 1: Pre-extracting ResNet-50 Pooler embeddings", flush=True)
-    print(f"  {num_classes} instruments × {num_augmentations} augmentations = {num_classes * num_augmentations} samples", flush=True)
+    print(f"  {total_database_rows} images × {num_augmentations} augmentations = {total_samples} samples", flush=True)
     print(f"  Using connected-component cropping + enhanced augmentation", flush=True)
     print(f"  (grayscale, color temperature, noise for domain gap bridging)", flush=True)
     print(f"{'='*60}", flush=True)
 
     # Pre-allocate feature tensor for memory efficiency
     # ResNet-50 pooler output: (2048, 1, 1)
-    total_samples = num_classes * num_augmentations
     X_train = torch.empty(total_samples, 2048, 1, 1)
     y_train = torch.empty(total_samples, dtype=torch.long)
     sample_offset = 0

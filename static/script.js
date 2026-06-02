@@ -191,8 +191,40 @@ document.addEventListener("DOMContentLoaded", () => {
         dialogPage.textContent = `Page ${item.page}`;
         dialogGridId.textContent = item.id;
         
+        const dialogDescription = document.getElementById("dialogDescription");
+        if (dialogDescription) {
+            dialogDescription.textContent = item.description || "This surgical instrument is precision-crafted from high-grade medical steel, designed to meet rigorous clinical standards for hospital surgical workflows.";
+        }
+        
+        // Dynamically render catalogs
+        const dialogCatalogs = document.getElementById("dialogCatalogs");
+        if (dialogCatalogs) {
+            let catalogsList = [];
+            try {
+                catalogsList = typeof item.catalogs === 'string' ? JSON.parse(item.catalogs) : item.catalogs;
+            } catch (e) {
+                catalogsList = [];
+            }
+            if (!Array.isArray(catalogsList)) {
+                catalogsList = [];
+            }
+            if (catalogsList.length === 0) {
+                catalogsList = [{
+                    "catalog": item.category === "Medical Rubber Products" ? "Medical Rubber Products Catalog" : (item.category === "Ophthalmic Instruments" ? "Ophthalmic Instruments Catalog" : "Surgical Instruments Catalog"),
+                    "page": item.page
+                }];
+            }
+            dialogCatalogs.innerHTML = catalogsList.map(c => `
+                <span class="catalog-badge">
+                    <i data-lucide="book-open"></i>
+                    ${c.catalog} (Page ${c.page})
+                </span>
+            `).join('');
+        }
+        
         // Show dialog using standard top-layer modal API
         detailsDialog.showModal();
+        lucide.createIcons();
     }
 
     // Close Dialog events
@@ -403,6 +435,32 @@ document.addEventListener("DOMContentLoaded", () => {
         heroMatchSku.textContent = `SKU: ${topMatch.sku}`;
         heroMatchSize.textContent = `Sizes: ${topMatch.size || 'Standard Size'}`;
         heroMatchPage.textContent = `Catalog Page: ${topMatch.page}`;
+
+        // Render dynamic parent catalogs for hero match
+        const heroMatchCatalogs = document.getElementById("heroMatchCatalogs");
+        if (heroMatchCatalogs) {
+            let catalogsList = [];
+            try {
+                catalogsList = typeof topMatch.catalogs === 'string' ? JSON.parse(topMatch.catalogs) : topMatch.catalogs;
+            } catch (e) {
+                catalogsList = [];
+            }
+            if (!Array.isArray(catalogsList)) {
+                catalogsList = [];
+            }
+            if (catalogsList.length === 0) {
+                catalogsList = [{
+                    "catalog": topMatch.category === "Medical Rubber Products" ? "Medical Rubber Products Catalog" : (topMatch.category === "Ophthalmic Instruments" ? "Ophthalmic Instruments Catalog" : "Surgical Instruments Catalog"),
+                    "page": topMatch.page
+                }];
+            }
+            heroMatchCatalogs.innerHTML = catalogsList.map(c => `
+                <span class="catalog-badge">
+                    <i data-lucide="book-open"></i>
+                    ${c.catalog} (Page ${c.page})
+                </span>
+            `).join('');
+        }
 
         // 2. Render subsequent matches in detailed list
         matchesList.innerHTML = "";

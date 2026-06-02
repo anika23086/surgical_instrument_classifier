@@ -12,7 +12,7 @@ import torch
 from scipy import ndimage
 
 
-def crop_multiscale_regions(img, padding=10, inset_threshold=400):
+def crop_multiscale_regions(img, padding=10, inset_threshold=400, is_rubber=False):
     """
     Programmatically splits a catalog image into three visual scales:
     1. Full-Body Crop: Isolated main instrument body (largest connected component, no text/inset).
@@ -62,6 +62,10 @@ def crop_multiscale_regions(img, padding=10, inset_threshold=400):
     max_dim = max(cw, ch)
     full_body = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
     full_body.paste(cropped_main, ((max_dim - cw) // 2, (max_dim - ch) // 2))
+
+    if is_rubber:
+        # Category-aware crop fallback: medical rubber products bypass jaw/inset extraction
+        return full_body, full_body, None
 
     # 2. Jaw Region (top 45% of cropped main height)
     jaw_height = int(ch * 0.45)
