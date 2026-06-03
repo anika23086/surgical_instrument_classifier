@@ -67,6 +67,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!item.size) item.size = "Standard Bx Size";
             });
 
+            // Dynamically update the index cache indicator text
+            const statusText = document.querySelector(".status-text");
+            if (statusText) {
+                // Determine the number of unique classes (ids) present
+                const uniqueClasses = new Set(catalogItems.map(item => item.id)).size;
+                statusText.textContent = `Index Cached: ${uniqueClasses} Instruments`;
+            }
+
             renderCatalogGrid();
             setupCategoryFilterTabs();
         } catch (err) {
