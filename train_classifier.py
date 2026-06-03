@@ -152,10 +152,10 @@ def train_model():
                         inset = Image.open(inset_path).convert("RGB")
 
                 # Resize to target 224x224
-                full_body = full_body.resize((224, 224), Image.Resampling.LANCZOS)
-                jaw = jaw.resize((224, 224), Image.Resampling.LANCZOS)
+                full_body = full_body.resize((224, 224), Image.Resampling.BILINEAR)
+                jaw = jaw.resize((224, 224), Image.Resampling.BILINEAR)
                 if inset is not None:
-                    inset = inset.resize((224, 224), Image.Resampling.LANCZOS)
+                    inset = inset.resize((224, 224), Image.Resampling.BILINEAR)
 
                 batch_tensors = []
 

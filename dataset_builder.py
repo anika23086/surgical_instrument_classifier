@@ -811,9 +811,282 @@ def parse_medical_rubber_catalog(pdf_path, out_images_dir, logo_hashes):
     print(f"Medical rubber products catalog parsing completed. Mapped: {total_parsed} items.")
     return metadata
 
+def parse_hospital_furniture_catalog(pdf_path, out_images_dir, logo_hashes):
+    """
+    Parses the 10-page hospital furniture and holloware catalog.
+    Uses closest vertical distance spatial 2D pairing to pair product images to titles,
+    Poppins-Medium title extraction, and Poppins-Light description gathering.
+    """
+    print("\n--- Parsing Hospital Furniture & Holloware Catalog ---")
+    doc = fitz.open(pdf_path)
+    metadata = []
+    total_parsed = 0
+
+    HOLLOWARE_MAP = {
+        "Kidney Tray (Stainless Steel)": {
+            "sku": "70000 to 70007",
+            "size": "150mm (6\") to 300mm (12\")",
+            "description": "Made from high quality stainless steel which is long lasting and rust free. Without cover. Available in General & Deluxe quality.",
+            "category": "Hospital Holloware"
+        },
+        "Kidney Tray (Polypropylene)": {
+            "sku": "70077 to 70080",
+            "size": "6\" to 12\"",
+            "description": "These kidney trays are autoclavable and light in weight. Material: Polypropylene.",
+            "category": "Hospital Holloware"
+        },
+        "Instrument Tray (Stainless Steel)": {
+            "sku": "70008 to 70027",
+            "size": "200x79x40mm to 450x300x50mm",
+            "description": "These instrument trays are made from high quality stainless steel which is long lasting and rust free. Instrument tray with cover/lid. Available in General & Deluxe quality.",
+            "category": "Hospital Holloware"
+        }
+    }
+
+    for page_idx in range(len(doc)):
+        page = doc[page_idx]
+        width = page.rect.width
+        mid_x = width / 2.0
+        
+        text_info = page.get_text("dict")
+        
+        # 1. Group text spans by Left/Right side
+        left_spans = []
+        right_spans = []
+        for block in text_info["blocks"]:
+            if "lines" not in block:
+                continue
+            for line in block["lines"]:
+                for span in line["spans"]:
+                    txt = span["text"].strip()
+                    if not txt:
+                        continue
+                    if span["bbox"][0] < mid_x:
+                        left_spans.append(span)
+                    else:
+                        right_spans.append(span)
+
+        # 2. Extract Left/Right titles (Poppins-Medium, size > 9.5)
+        left_titles = []
+        right_titles = []
+
+        for span in left_spans:
+            txt = span["text"].strip()
+            if "Poppins-Medium" in span["font"] and span["size"] > 9.5:
+                # Include standard 10xxx furniture items and holloware items
+                is_furniture = False
+                words = txt.split()
+                if words and words[0].isdigit() and len(words[0]) == 5:
+                    is_furniture = True
+                is_holloware = txt in HOLLOWARE_MAP
+                if is_furniture or is_holloware:
+                    left_titles.append({"text": txt, "y": span["bbox"][1], "span": span, "is_holloware": is_holloware})
+
+        for span in right_spans:
+            txt = span["text"].strip()
+            if "Poppins-Medium" in span["font"] and span["size"] > 9.5:
+                is_furniture = False
+                words = txt.split()
+                if words and words[0].isdigit() and len(words[0]) == 5:
+                    is_furniture = True
+                is_holloware = txt in HOLLOWARE_MAP
+                if is_furniture or is_holloware:
+                    right_titles.append({"text": txt, "y": span["bbox"][1], "span": span, "is_holloware": is_holloware})
+
+        # Sort titles vertically
+        left_titles.sort(key=lambda x: x["y"])
+        right_titles.sort(key=lambda x: x["y"])
+
+        # 3. Extract Left/Right product images (width > 15, height > 15, excluding logos)
+        left_images = []
+        right_images = []
+
+        for img_info in page.get_images(full=True):
+            xref = img_info[0]
+            rects = page.get_image_rects(xref)
+            for r in rects:
+                if r.width < 15 or r.height < 15:
+                    continue
+                # Skip middle logo/header templates
+                if 500 < r.x0 < 520:
+                    continue
+                if r.y0 < 50 or r.y0 > 780:
+                    continue
+                
+                img_item = {"xref": xref, "rect": r, "y": r.y0}
+                if r.x0 < mid_x:
+                    left_images.append(img_item)
+                else:
+                    right_images.append(img_item)
+
+        # 4. Process Left Side Items
+        left_page_num = 50 + (page_idx * 2)
+        for i, title in enumerate(left_titles):
+            title_y = title["y"]
+            next_y = left_titles[i+1]["y"] if i + 1 < len(left_titles) else 780.0
+            
+            # Gather description bullet points under this title
+            desc_lines = []
+            for span in left_spans:
+                x0, y0, x1, y1 = span["bbox"]
+                if title_y + 5 < y0 < next_y - 2:
+                    if x0 > 350: # exclude image area
+                        continue
+                    if "Poppins-Light" in span["font"] or span["size"] < 9.0:
+                        txt = span["text"].strip()
+                        if txt and txt != "»":
+                            desc_lines.append(txt)
+
+            # Parse metadata
+            if title["is_holloware"]:
+                mapped = HOLLOWARE_MAP[title["text"]]
+                sku = mapped["sku"]
+                name = title["text"]
+                size = mapped["size"]
+                description = mapped["description"]
+                category = mapped["category"]
+            else:
+                match = re.match(r'^(\d{5})\s*-\s*(.*)$', title["text"])
+                sku = match.group(1).strip() if match else "N/A"
+                name = match.group(2).strip() if match else title["text"]
+                category = "Hospital Furniture"
+                # Size extraction from description
+                size = "Standard Size"
+                for line in desc_lines:
+                    if "size" in line.lower() or "approx" in line.lower() or "dimension" in line.lower():
+                        size = line
+                        break
+                description = " ".join(desc_lines) if desc_lines else "Hospital furniture catalog item."
+
+            # Find closest image vertically
+            best_img = None
+            min_dist = float('inf')
+            for img in left_images:
+                dist = abs(img["y"] - title_y)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_img = img
+
+            if best_img:
+                class_id = f"furn_p{left_page_num:02d}_l{i:02d}"
+                img_filename = f"{class_id}.png"
+                img_path = out_images_dir / img_filename
+                
+                # Save cropped image
+                best_rect = best_img["rect"]
+                padded_rect = fitz.Rect(
+                    max(0, best_rect.x0 - 3),
+                    max(0, best_rect.y0 - 3),
+                    min(page.rect.x1, best_rect.x1 + 3),
+                    min(page.rect.y1, best_rect.y1 + 3)
+                )
+                pix = page.get_pixmap(clip=padded_rect, dpi=200)
+                pix.save(str(img_path))
+                
+                catalogs_arr = [{
+                    "catalog": "Hospital Furniture Catalog",
+                    "page": left_page_num,
+                    "image_path": f"dataset/processed/{class_id}_full.png"
+                }]
+                
+                metadata.append({
+                    "id": class_id,
+                    "name": name,
+                    "sku": sku,
+                    "size": size,
+                    "category": category,
+                    "page": left_page_num,
+                    "image_path": f"dataset/processed/{img_filename}",
+                    "catalogs": json.dumps(catalogs_arr),
+                    "description": description
+                })
+                total_parsed += 1
+
+        # 5. Process Right Side Items
+        right_page_num = 50 + (page_idx * 2) + 1
+        for i, title in enumerate(right_titles):
+            title_y = title["y"]
+            next_y = right_titles[i+1]["y"] if i + 1 < len(right_titles) else 780.0
+            
+            desc_lines = []
+            for span in right_spans:
+                x0, y0, x1, y1 = span["bbox"]
+                if title_y + 5 < y0 < next_y - 2:
+                    if x0 > 950: # exclude image area
+                        continue
+                    if "Poppins-Light" in span["font"] or span["size"] < 9.0:
+                        txt = span["text"].strip()
+                        if txt and txt != "»":
+                            desc_lines.append(txt)
+
+            if title["is_holloware"]:
+                mapped = HOLLOWARE_MAP[title["text"]]
+                sku = mapped["sku"]
+                name = title["text"]
+                size = mapped["size"]
+                description = mapped["description"]
+                category = mapped["category"]
+            else:
+                match = re.match(r'^(\d{5})\s*-\s*(.*)$', title["text"])
+                sku = match.group(1).strip() if match else "N/A"
+                name = match.group(2).strip() if match else title["text"]
+                category = "Hospital Furniture"
+                size = "Standard Size"
+                for line in desc_lines:
+                    if "size" in line.lower() or "approx" in line.lower() or "dimension" in line.lower():
+                        size = line
+                        break
+                description = " ".join(desc_lines) if desc_lines else "Hospital furniture catalog item."
+
+            best_img = None
+            min_dist = float('inf')
+            for img in right_images:
+                dist = abs(img["y"] - title_y)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_img = img
+
+            if best_img:
+                class_id = f"furn_p{right_page_num:02d}_r{i:02d}"
+                img_filename = f"{class_id}.png"
+                img_path = out_images_dir / img_filename
+                
+                best_rect = best_img["rect"]
+                padded_rect = fitz.Rect(
+                    max(0, best_rect.x0 - 3),
+                    max(0, best_rect.y0 - 3),
+                    min(page.rect.x1, best_rect.x1 + 3),
+                    min(page.rect.y1, best_rect.y1 + 3)
+                )
+                pix = page.get_pixmap(clip=padded_rect, dpi=200)
+                pix.save(str(img_path))
+                
+                catalogs_arr = [{
+                    "catalog": "Hospital Furniture Catalog",
+                    "page": right_page_num,
+                    "image_path": f"dataset/processed/{class_id}_full.png"
+                }]
+                
+                metadata.append({
+                    "id": class_id,
+                    "name": name,
+                    "sku": sku,
+                    "size": size,
+                    "category": category,
+                    "page": right_page_num,
+                    "image_path": f"dataset/processed/{img_filename}",
+                    "catalogs": json.dumps(catalogs_arr),
+                    "description": description
+                })
+                total_parsed += 1
+
+    doc.close()
+    print(f"Hospital Furniture catalog parsing completed. Mapped: {total_parsed} items.")
+    return metadata
+
 def build_unified_dataset():
     """
-    Main orchestrator that parses all three catalogs and creates a unified metadata.csv database.
+    Main orchestrator that parses all four catalogs and creates a unified metadata.csv database.
     """
     project_dir = Path("/Users/anika/Desktop/surgical_instrument_classifier")
     out_dir = project_dir / "dataset"
@@ -859,9 +1132,15 @@ def build_unified_dataset():
         out_images_dir, 
         logo_hashes
     )
+
+    hospital_furniture_metadata = parse_hospital_furniture_catalog(
+        project_dir / "hospital-furniture.pdf",
+        out_images_dir,
+        logo_hashes
+    )
     
     # Combine metadata
-    unified_metadata = surgical_metadata + ophthalmic_metadata + medical_rubber_metadata
+    unified_metadata = surgical_metadata + ophthalmic_metadata + medical_rubber_metadata + hospital_furniture_metadata
     
     # Convert to DataFrame and export
     metadata_df = pd.DataFrame(unified_metadata)

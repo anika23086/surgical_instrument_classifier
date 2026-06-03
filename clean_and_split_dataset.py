@@ -53,7 +53,7 @@ def clean_and_split():
             img = Image.open(raw_img_path)
             
             # Extract crops with category-aware logic
-            is_rubber = id_str.startswith("rub_")
+            is_rubber = id_str.startswith("rub_") or id_str.startswith("furn_")
             full_body, jaw, inset = crop_multiscale_regions(img, is_rubber=is_rubber)
             
             # Paths to save

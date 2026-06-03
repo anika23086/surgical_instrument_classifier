@@ -210,7 +210,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (catalogsList.length === 0) {
                 catalogsList = [{
-                    "catalog": item.category === "Medical Rubber Products" ? "Medical Rubber Products Catalog" : (item.category === "Ophthalmic Instruments" ? "Ophthalmic Instruments Catalog" : "Surgical Instruments Catalog"),
+                    "catalog": item.category === "Medical Rubber Products" ? "Medical Rubber Products Catalog" : (item.category === "Ophthalmic Instruments" ? "Ophthalmic Instruments Catalog" : (item.category === "Hospital Furniture" ? "Hospital Furniture Catalog" : (item.category === "Hospital Holloware" ? "Hospital Holloware Catalog" : "Surgical Instruments Catalog"))),
                     "page": item.page
                 }];
             }

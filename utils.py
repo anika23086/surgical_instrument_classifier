@@ -140,7 +140,7 @@ def augment_image(img):
     if random.random() > 0.05:
         scale_factor = random.uniform(0.55, 1.0)
         new_dim = int(224 * scale_factor)
-        resized = canvas.resize((new_dim, new_dim), Image.Resampling.LANCZOS)
+        resized = canvas.resize((new_dim, new_dim), Image.Resampling.BILINEAR)
 
         padded_canvas = Image.new("RGB", (224, 224), (255, 255, 255))
         offset_x = random.randint(0, 224 - new_dim)
