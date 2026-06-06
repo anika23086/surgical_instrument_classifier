@@ -156,6 +156,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (cat === "Surgical Forceps") displayName = "Forceps";
             else if (cat === "Surgical Scissors") displayName = "Scissors";
             else if (cat === "Surgical Retractors") displayName = "Retractors";
+            else if (cat === "Hospital Holloware") displayName = "Holloware";
+            else if (cat === "Height & Weight Scales") displayName = "Scales";
+            else if (cat === "Autoclave & Sterilizer") displayName = "Autoclaves";
             
             const btn = document.createElement("button");
             btn.className = "tab-btn";

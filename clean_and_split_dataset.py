@@ -35,15 +35,22 @@ def clean_and_split():
     
     for idx, row in df.iterrows():
         id_str = row['id']
-        raw_img_path = PROCESSED_DIR / f"{id_str}.png"
         
-        if not raw_img_path.exists():
-            # Fall back to checking row['image_path'] if it points to a raw file
-            raw_img_path = PROJECT_DIR / row['image_path']
-            if not raw_img_path.exists() or "_full" in raw_img_path.name:
-                # Try finding the original raw name
-                raw_img_path = PROCESSED_DIR / f"{id_str.split('_full')[0]}.png"
+        # Determine the raw image path based on the current row's image_path
+        current_img_path = row['image_path']
+        if pd.isna(current_img_path) or current_img_path == "":
+            raw_img_path = PROCESSED_DIR / f"{id_str}.png"
+        else:
+            if "_full" in current_img_path:
+                raw_img_name = Path(current_img_path).name.replace("_full", "")
+                raw_img_path = PROCESSED_DIR / raw_img_name
+            else:
+                raw_img_path = PROJECT_DIR / current_img_path
                 
+        if not raw_img_path.exists():
+            # Try a fallback of id_str.png
+            raw_img_path = PROCESSED_DIR / f"{id_str}.png"
+
         if not raw_img_path.exists():
             print(f"Warning: Raw catalog image missing for {id_str} at {raw_img_path}. Skipping.")
             continue
@@ -53,13 +60,14 @@ def clean_and_split():
             img = Image.open(raw_img_path)
             
             # Extract crops with category-aware logic
-            is_rubber = id_str.startswith("rub_") or id_str.startswith("furn_")
+            is_rubber = id_str.startswith("rub_") or id_str.startswith("furn_") or id_str.startswith("holl_") or id_str.startswith("scal_") or id_str.startswith("auto_")
             full_body, jaw, inset = crop_multiscale_regions(img, is_rubber=is_rubber)
             
-            # Paths to save
-            full_body_name = f"{id_str}_full.png"
-            jaw_name = f"{id_str}_jaw.png"
-            inset_name = f"{id_str}_inset.png"
+            # Paths to save, derived from the raw image filename to prevent collision/overwriting for unified items
+            crop_base = raw_img_path.name.replace(".png", "").replace(".jpg", "")
+            full_body_name = f"{crop_base}_full.png"
+            jaw_name = f"{crop_base}_jaw.png"
+            inset_name = f"{crop_base}_inset.png"
             
             full_body_path = PROCESSED_DIR / full_body_name
             jaw_path = PROCESSED_DIR / jaw_name

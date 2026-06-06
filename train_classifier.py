@@ -234,7 +234,7 @@ def train_model():
     model.classifier.to(device)
 
     # Initialize ArcFace head (embedding_dim=2048 for ResNet-50 pooler output)
-    arcface = ArcFaceHead(embedding_dim=2048, num_classes=num_classes, scale=30.0, margin=0.5)
+    arcface = ArcFaceHead(embedding_dim=2048, num_classes=num_classes, scale=30.0, margin=0.55)
     arcface.to(device)
 
     train_dataset = TensorDataset(X_train, y_train)
@@ -248,7 +248,7 @@ def train_model():
         {"params": arcface.parameters(), "lr": 1e-3},
     ], weight_decay=1e-3)
 
-    epochs = 30
+    epochs = 50
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
 
     t_train_start = time.time()

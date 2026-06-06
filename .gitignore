@@ -24,3 +24,5 @@ dataset/embeddings_cache.pkl
 # Large model weights
 dataset/*.pt
 
+# Temporary/scratch files
+scratch/

@@ -14,6 +14,35 @@ def clean_reconstructed_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text
 
+def deduplicate_spatial_words(words_list):
+    sorted_words = sorted(words_list, key=lambda w: len(w[4]), reverse=True)
+    kept = []
+    for w in sorted_words:
+        x0, y0, x1, y1, text = w[0], w[1], w[2], w[3], w[4]
+        
+        is_dup = False
+        for kw in kept:
+            kx0, ky0, kx1, ky1 = kw[0], kw[1], kw[2], kw[3]
+            
+            v_overlap = max(0, min(y1, ky1) - max(y0, ky0))
+            h = y1 - y0
+            kh = ky1 - ky0
+            min_h = min(h, kh)
+            
+            # Require high vertical overlap fraction to consider them on the same line
+            v_close = (min_h > 0) and (v_overlap / min_h > 0.7)
+            
+            if v_close:
+                h_overlap = max(0, min(x1, kx1) - max(x0, kx0))
+                if h_overlap > 2:
+                    is_dup = True
+                    break
+        if not is_dup:
+            kept.append(w)
+    
+    kept.sort(key=lambda w: (w[5], w[6], w[7]))
+    return kept
+
 def parse_surgical_catalog(pdf_path, out_images_dir, logo_hashes):
     """
     Parses the original surgical instruments catalog.
@@ -124,19 +153,19 @@ def parse_surgical_catalog(pdf_path, out_images_dir, logo_hashes):
                     imgs = grid_images[(r, c)]
                     
                     if txt_words and imgs:
-                        txt_words.sort(key=lambda w: (w[5], w[6], w[7]))
+                        txt_words = deduplicate_spatial_words(txt_words)
                         raw_text = " ".join([w[4] for w in txt_words])
                         clean_text = clean_reconstructed_text(raw_text)
                         
                         sku_match = re.search(r'SKU:\s*([A-Za-z0-9\-/]+(?:\s+SKU:\s*[A-Za-z0-9\-/]+)*)', clean_text, re.IGNORECASE)
-                        size_match = re.search(r'Size:\s*([^S]+)', clean_text, re.IGNORECASE)
+                        size_match = re.search(r'Size:\s*(.*?)(?=SKU:|$)', clean_text, re.IGNORECASE)
                         
                         sku = sku_match.group(1).strip() if sku_match else "N/A"
                         size = size_match.group(1).strip() if size_match else "N/A"
                         
                         name = clean_text
+                        name = re.sub(r'Size:\s*.*?(?=SKU:|$)', '', name, flags=re.IGNORECASE)
                         name = re.sub(r'SKU:\s*[A-Za-z0-9\-/]+', '', name, flags=re.IGNORECASE)
-                        name = re.sub(r'Size:\s*[^S]+', '', name, flags=re.IGNORECASE)
                         name = re.sub(r'\s+', ' ', name).strip()
                         
                         if not name or len(name) < 3:
@@ -268,19 +297,19 @@ def parse_surgical_catalog(pdf_path, out_images_dir, logo_hashes):
                     imgs = grid_images[(r, c)]
                     
                     if txt_words and imgs:
-                        txt_words.sort(key=lambda w: (w[5], w[6], w[7]))
+                        txt_words = deduplicate_spatial_words(txt_words)
                         raw_text = " ".join([w[4] for w in txt_words])
                         clean_text = clean_reconstructed_text(raw_text)
                         
                         sku_match = re.search(r'SKU:\s*([A-Za-z0-9\-/]+(?:\s+SKU:\s*[A-Za-z0-9\-/]+)*)', clean_text, re.IGNORECASE)
-                        size_match = re.search(r'Size:\s*([^S]+)', clean_text, re.IGNORECASE)
+                        size_match = re.search(r'Size:\s*(.*?)(?=SKU:|$)', clean_text, re.IGNORECASE)
                         
                         sku = sku_match.group(1).strip() if sku_match else "N/A"
                         size = size_match.group(1).strip() if size_match else "N/A"
                         
                         name = clean_text
+                        name = re.sub(r'Size:\s*.*?(?=SKU:|$)', '', name, flags=re.IGNORECASE)
                         name = re.sub(r'SKU:\s*[A-Za-z0-9\-/]+', '', name, flags=re.IGNORECASE)
-                        name = re.sub(r'Size:\s*[^S]+', '', name, flags=re.IGNORECASE)
                         name = re.sub(r'\s+', ' ', name).strip()
                         
                         if not name or len(name) < 3:
@@ -432,7 +461,7 @@ def parse_ophthalmic_catalog(pdf_path, out_images_dir, logo_hashes, surgical_met
                 imgs = grid_images[(r, c)]
                 
                 if txt_words and imgs:
-                    txt_words.sort(key=lambda w: (w[5], w[6], w[7]))
+                    txt_words = deduplicate_spatial_words(txt_words)
                     raw_text = " ".join([w[4] for w in txt_words])
                     clean_text = clean_reconstructed_text(raw_text)
                     
@@ -1084,9 +1113,273 @@ def parse_hospital_furniture_catalog(pdf_path, out_images_dir, logo_hashes):
     print(f"Hospital Furniture catalog parsing completed. Mapped: {total_parsed} items.")
     return metadata
 
+def extract_skus(title_text, desc_text):
+    text_to_search = title_text + " " + desc_text
+    all_5digits = re.findall(r'\b(\d{5})\b', text_to_search)
+    if not all_5digits:
+        return "N/A"
+    
+    seen = set()
+    unique_5digits = []
+    for num in all_5digits:
+        if num not in seen:
+            seen.add(num)
+            unique_5digits.append(int(num))
+            
+    if len(unique_5digits) == 1:
+        return str(unique_5digits[0])
+    
+    unique_5digits.sort()
+    return f"{unique_5digits[0]} to {unique_5digits[-1]}"
+
+def parse_double_page_landscape_catalog(pdf_path, out_images_dir, logo_hashes, master_metadata, page_offset, category_default, id_prefix):
+    doc = fitz.open(pdf_path)
+    metadata = []
+    total_parsed = 0
+    total_unified = 0
+    
+    # Build lookup map of existing items by clean SKU
+    sku_to_master_item = {}
+    for item in master_metadata:
+        s_clean = re.sub(r'[^a-zA-Z0-9]', '', str(item["sku"])).lower().strip()
+        if s_clean and s_clean != "na" and s_clean != "nan":
+            sku_to_master_item[s_clean] = item
+            
+    for page_idx in range(len(doc)):
+        page = doc[page_idx]
+        width = page.rect.width
+        mid_x = width / 2.0
+        
+        text_info = page.get_text("dict")
+        
+        # 1. Group text spans by Left/Right side
+        left_spans = []
+        right_spans = []
+        for block in text_info["blocks"]:
+            if "lines" not in block:
+                continue
+            for line in block["lines"]:
+                for span in line["spans"]:
+                    txt = span["text"].strip()
+                    if not txt:
+                        continue
+                    if "Copyright" in txt or "indosurgicals" in txt or "right" in txt or "Ltd." in txt:
+                        continue
+                    if span["bbox"][0] < mid_x:
+                        left_spans.append(span)
+                    else:
+                        right_spans.append(span)
+                        
+        def group_titles(spans):
+            medium_spans = [s for s in spans if "Poppins-Medium" in s["font"] and s["size"] > 9.0]
+            medium_spans.sort(key=lambda s: s["bbox"][1])
+            
+            grouped = []
+            current_group = []
+            for s in medium_spans:
+                txt = s["text"].strip()
+                if "HOSPITAL HOLLOWARE" in txt.upper() or "HEIGHT & WEIGHT SCALES" in txt.upper() or "AUTOCLAVE & STERILIZER" in txt.upper() or "HOSPITAL FURNITURE" in txt.upper():
+                    continue
+                if not current_group:
+                    current_group.append(s)
+                else:
+                    last_s = current_group[-1]
+                    dist = s["bbox"][1] - last_s["bbox"][3]
+                    if dist < 12.0:
+                        current_group.append(s)
+                    else:
+                        grouped.append(current_group)
+                        current_group = [s]
+            if current_group:
+                grouped.append(current_group)
+                
+            titles = []
+            for g in grouped:
+                g.sort(key=lambda s: (s["bbox"][1], s["bbox"][0]))
+                full_text = " ".join([s["text"].strip() for s in g])
+                full_text = clean_reconstructed_text(full_text)
+                min_y = min(s["bbox"][1] for s in g)
+                titles.append({"text": full_text, "y": min_y, "spans": g})
+            return titles
+            
+        left_titles = group_titles(left_spans)
+        right_titles = group_titles(right_spans)
+        
+        left_images = []
+        right_images = []
+        for img_info in page.get_images(full=True):
+            xref = img_info[0]
+            rects = page.get_image_rects(xref)
+            for r in rects:
+                if r.width < 15 or r.height < 15:
+                    continue
+                if 500 < r.x0 < 595:
+                    continue
+                if r.y0 < 50 or r.y0 > 790:
+                    continue
+                img_item = {"xref": xref, "rect": r, "y": r.y0}
+                if r.x0 < mid_x:
+                    left_images.append(img_item)
+                else:
+                    right_images.append(img_item)
+                    
+        def pair_and_parse(titles, spans, images, side_label, page_num):
+            nonlocal total_parsed, total_unified
+            for i, title in enumerate(titles):
+                title_y = title["y"]
+                next_y = titles[i+1]["y"] if i + 1 < len(titles) else 780.0
+                
+                desc_lines = []
+                for span in spans:
+                    x0, y0, x1, y1 = span["bbox"]
+                    if title_y + 5 < y0 < next_y - 2:
+                        if side_label == "left" and x0 > 360:
+                            continue
+                        if side_label == "right" and x0 > 960:
+                            continue
+                        if "Poppins-Light" in span["font"] or span["size"] < 9.0:
+                            txt = span["text"].strip()
+                            if txt and txt != "»":
+                                desc_lines.append(txt)
+                                
+                description = " ".join(desc_lines) if desc_lines else f"High-quality {category_default} catalog item."
+                
+                # Check for standard "5-digit - Title" or "5-digit Title" or similar
+                match = re.match(r'^(\d{5})\s*-\s*(.*)$', title["text"])
+                if match:
+                    sku = match.group(1).strip()
+                    name = match.group(2).strip()
+                else:
+                    sku = extract_skus(title["text"], description)
+                    name = title["text"]
+                    if sku != "N/A" and " - " in name:
+                        name = re.sub(r'^\d{5}\s*-\s*', '', name)
+                        
+                size = "Standard Size"
+                for line in desc_lines:
+                    if "size" in line.lower() or "approx" in line.lower() or "dimension" in line.lower():
+                        size = line
+                        break
+                        
+                best_img = None
+                min_dist = float('inf')
+                for img in images:
+                    dist = abs(img["y"] - title_y)
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_img = img
+                        
+                if not best_img:
+                    continue
+                    
+                # Unification logic
+                clean_sku = re.sub(r'[^a-zA-Z0-9]', '', str(sku)).lower().strip()
+                is_duplicate = clean_sku in sku_to_master_item
+                
+                if is_duplicate:
+                    primary_item = sku_to_master_item[clean_sku]
+                    class_id = primary_item["id"]
+                    
+                    img_filename = f"{id_prefix}{class_id}.png"
+                    
+                    try:
+                        orig_cats = json.loads(primary_item["catalogs"])
+                    except Exception:
+                        orig_cats = [{
+                            "catalog": "Original Catalog",
+                            "page": int(primary_item["page"]),
+                            "image_path": f"dataset/processed/{class_id}_full.png"
+                        }]
+                        
+                    new_occurrence = {
+                        "catalog": f"{category_default} Catalog",
+                        "page": int(page_num),
+                        "image_path": f"dataset/processed/{id_prefix}{class_id}_full.png"
+                    }
+                    
+                    if not any(cat["catalog"] == f"{category_default} Catalog" and cat["page"] == int(page_num) for cat in orig_cats):
+                        orig_cats.append(new_occurrence)
+                        
+                    updated_catalogs_str = json.dumps(orig_cats)
+                    primary_item["catalogs"] = updated_catalogs_str
+                    
+                    # Update all occurrences of this class_id in the master list so they share the same list
+                    for item in master_metadata:
+                        if item["id"] == class_id:
+                            item["catalogs"] = updated_catalogs_str
+                    for item in metadata:
+                        if item["id"] == class_id:
+                            item["catalogs"] = updated_catalogs_str
+                            
+                    total_unified += 1
+                    category = primary_item["category"]
+                else:
+                    class_id = f"{id_prefix}p{page_num:02d}_{side_label}{i:02d}"
+                    img_filename = f"{class_id}.png"
+                    category = category_default
+                    updated_catalogs_str = json.dumps([{
+                        "catalog": f"{category_default} Catalog",
+                        "page": int(page_num),
+                        "image_path": f"dataset/processed/{class_id}_full.png"
+                    }])
+                    
+                img_path = out_images_dir / img_filename
+                best_rect = best_img["rect"]
+                padded_rect = fitz.Rect(
+                    max(0, best_rect.x0 - 3),
+                    max(0, best_rect.y0 - 3),
+                    min(page.rect.x1, best_rect.x1 + 3),
+                    min(page.rect.y1, best_rect.y1 + 3)
+                )
+                pix = page.get_pixmap(clip=padded_rect, dpi=200)
+                pix.save(str(img_path))
+                
+                metadata.append({
+                    "id": class_id,
+                    "name": name,
+                    "sku": sku,
+                    "size": size,
+                    "category": category,
+                    "page": int(page_num),
+                    "image_path": f"dataset/processed/{img_filename}",
+                    "catalogs": updated_catalogs_str,
+                    "description": description
+                })
+                total_parsed += 1
+                
+        left_page_num = page_offset + (page_idx * 2)
+        right_page_num = page_offset + (page_idx * 2) + 1
+        pair_and_parse(left_titles, left_spans, left_images, "left", left_page_num)
+        pair_and_parse(right_titles, right_spans, right_images, "right", right_page_num)
+        
+    doc.close()
+    print(f"{category_default} catalog parsing completed. Mapped: {total_parsed} items ({total_unified} unified).")
+    return metadata
+
+def parse_hospital_holloware_catalog(pdf_path, out_images_dir, logo_hashes, master_metadata):
+    print("\n--- Parsing Hospital Holloware Catalog ---")
+    return parse_double_page_landscape_catalog(
+        pdf_path, out_images_dir, logo_hashes, master_metadata,
+        page_offset=68, category_default="Hospital Holloware", id_prefix="holl_"
+    )
+
+def parse_height_weight_scales_catalog(pdf_path, out_images_dir, logo_hashes, master_metadata):
+    print("\n--- Parsing Height & Weight Scales Catalog ---")
+    return parse_double_page_landscape_catalog(
+        pdf_path, out_images_dir, logo_hashes, master_metadata,
+        page_offset=46, category_default="Height & Weight Scales", id_prefix="scal_"
+    )
+
+def parse_autoclave_sterilizer_catalog(pdf_path, out_images_dir, logo_hashes, master_metadata):
+    print("\n--- Parsing Autoclave & Sterilizer Catalog ---")
+    return parse_double_page_landscape_catalog(
+        pdf_path, out_images_dir, logo_hashes, master_metadata,
+        page_offset=20, category_default="Autoclave & Sterilizer", id_prefix="auto_"
+    )
+
 def build_unified_dataset():
     """
-    Main orchestrator that parses all four catalogs and creates a unified metadata.csv database.
+    Main orchestrator that parses all catalogs and creates a unified metadata.csv database.
     """
     project_dir = Path("/Users/anika/Desktop/surgical_instrument_classifier")
     out_dir = project_dir / "dataset"
@@ -1139,8 +1432,35 @@ def build_unified_dataset():
         logo_hashes
     )
     
-    # Combine metadata
-    unified_metadata = surgical_metadata + ophthalmic_metadata + medical_rubber_metadata + hospital_furniture_metadata
+    # Combine metadata parsed so far
+    master_metadata = surgical_metadata + ophthalmic_metadata + medical_rubber_metadata + hospital_furniture_metadata
+    
+    # Parse new catalogs sequentially, passing cumulative master_metadata for SKU unification
+    hospital_holloware_metadata = parse_hospital_holloware_catalog(
+        project_dir / "hospital-holloware.pdf",
+        out_images_dir,
+        logo_hashes,
+        master_metadata
+    )
+    master_metadata = master_metadata + hospital_holloware_metadata
+    
+    height_weight_scales_metadata = parse_height_weight_scales_catalog(
+        project_dir / "height-and-weight-scales.pdf",
+        out_images_dir,
+        logo_hashes,
+        master_metadata
+    )
+    master_metadata = master_metadata + height_weight_scales_metadata
+    
+    autoclave_sterilizer_metadata = parse_autoclave_sterilizer_catalog(
+        project_dir / "autoclave-sterilizer.pdf",
+        out_images_dir,
+        logo_hashes,
+        master_metadata
+    )
+    
+    # Combine all metadata into final unified structure
+    unified_metadata = master_metadata + autoclave_sterilizer_metadata
     
     # Convert to DataFrame and export
     metadata_df = pd.DataFrame(unified_metadata)
