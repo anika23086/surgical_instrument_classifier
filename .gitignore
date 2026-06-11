@@ -26,3 +26,13 @@ dataset/*.pt
 
 # Temporary/scratch files
 scratch/
+
+# Environment variables (API keys)
+.env
+
+# User-uploaded catalog PDFs
+uploads/
+
+# Intermediate feature embeddings cache
+dataset/features/
+

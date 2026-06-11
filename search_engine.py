@@ -75,6 +75,18 @@ class SurgicalInstrumentSearchEngine:
         self.model.to(self.device)
         self.model.eval()
 
+    def reload(self):
+        """
+        Hot-reload all data and model weights after retraining.
+        Called automatically by the pipeline after training completes.
+        Zero downtime — the old model continues serving until reload is done.
+        """
+        print("Hot-reloading model and metadata...")
+        self.load_metadata()
+        self.load_class_mapping()
+        self.initialize_model()
+        print("Hot-reload complete! New model is now serving.")
+
     @staticmethod
     def preprocess_to_tensor(image):
         """

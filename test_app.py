@@ -64,5 +64,89 @@ class TestSurgicalVisionAI(unittest.TestCase):
         self.assertEqual(top_match['id'], 'p02_r1_c5')
         print(f"Success: Top match matched query item correctly with {top_match['similarity']*100:.2f}% similarity.")
 
+    def test_settings_endpoints(self):
+        """Verify GET and POST /api/settings."""
+        print("\nTesting /api/settings endpoints...")
+        
+        # Test GET settings
+        response = self.app.get('/api/settings')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('has_api_key', data)
+        
+        # Test POST settings with groq key
+        response = self.app.post(
+            '/api/settings',
+            data=json.dumps({'groq_api_key': 'valid_groq_key_for_tests'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data.get('success'))
+        
+        # Check settings again — has_api_key should reflect the active key
+        response = self.app.get('/api/settings')
+        data = json.loads(response.data)
+        self.assertTrue(data.get('has_groq_key'))
+        self.assertTrue(data.get('has_api_key'))
+
+    def test_upload_image_endpoint(self):
+        """Verify POST /api/upload-image saves the image."""
+        print("\nTesting /api/upload-image endpoint...")
+        sample_img_path = 'dataset/processed/p02_r1_c5.png'
+        
+        with open(sample_img_path, 'rb') as img_file:
+            response = self.app.post(
+                '/api/upload-image',
+                data={
+                    'image': (img_file, 'test_manual.png')
+                },
+                content_type='multipart/form-data'
+            )
+            
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data.get('success'))
+        self.assertIn('raw_image_path', data)
+        
+        # Verify file path is in raw folder
+        raw_path = data.get('raw_image_path')
+        self.assertTrue(raw_path.startswith('dataset/raw/manual_'))
+
+    def test_upload_catalog_endpoint(self):
+        """Verify POST /api/upload-catalog returns a job_id."""
+        print("\nTesting /api/upload-catalog endpoint...")
+        import io
+        
+        # Set a test API key to pass check
+        response = self.app.post(
+            '/api/settings',
+            data=json.dumps({'groq_api_key': 'valid_groq_key_for_tests'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        pdf_data = b"%PDF-1.4\n%mock pdf content\n%%EOF"
+        response = self.app.post(
+            '/api/upload-catalog',
+            data={
+                'catalog': (io.BytesIO(pdf_data), 'test_catalog.pdf')
+            },
+            content_type='multipart/form-data'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('job_id', data)
+        self.assertIn('filename', data)
+        
+        job_id = data.get('job_id')
+        
+        # Test pipeline status polling
+        response = self.app.get(f'/api/pipeline-status/{job_id}')
+        self.assertEqual(response.status_code, 200)
+        status_data = json.loads(response.data)
+        self.assertIn('stage', status_data)
+        self.assertIn('progress_pct', status_data)
+
 if __name__ == '__main__':
     unittest.main()

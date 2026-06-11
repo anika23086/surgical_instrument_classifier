@@ -115,29 +115,43 @@ def train_model():
     print(f"  (grayscale, color temperature, noise for domain gap bridging)", flush=True)
     print(f"{'='*60}", flush=True)
 
-    # Pre-allocate feature tensor for memory efficiency
-    # ResNet-50 pooler output: (2048, 1, 1)
-    X_train = torch.empty(total_samples, 2048, 1, 1)
-    y_train = torch.empty(total_samples, dtype=torch.long)
-    sample_offset = 0
+    # Ensure features directory exists
+    FEATURES_DIR = PROJECT_DIR / "dataset/features"
+    FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 
+    X_list = []
+    y_list = []
     t_start = time.time()
 
     with torch.no_grad():
         for idx, row in metadata_df.iterrows():
             cls_id = row['id']
+            label_idx = class_to_idx[cls_id]
+            feature_path = FEATURES_DIR / f"{cls_id}.pt"
+
+            # Check if features are already cached
+            if feature_path.exists():
+                try:
+                    pooler_output = torch.load(feature_path, map_location="cpu")
+                    if pooler_output.shape == (num_augmentations, 2048, 1, 1):
+                        X_list.append(pooler_output)
+                        y_list.append(torch.full((num_augmentations,), label_idx, dtype=torch.long))
+                        
+                        if (idx + 1) % 30 == 0 or (idx + 1) == total_database_rows:
+                            print(f"Loaded cached features for {idx + 1}/{total_database_rows} instruments...", flush=True)
+                        continue
+                except Exception as e:
+                    print(f"Error loading cached feature for {cls_id}: {e}. Re-extracting...", flush=True)
+
             full_path = PROJECT_DIR / row['image_path']
             jaw_path_str = row['jaw_path']
             inset_path_str = row['inset_path'] if pd.notna(row['inset_path']) and str(row['inset_path']).strip() != "" else None
 
-            label_idx = class_to_idx[cls_id]
-
             if not full_path.exists():
                 print(f"Warning: Clean full image missing at {full_path}. Skipping.", flush=True)
-                # Fill with zeros to maintain alignment
-                X_train[sample_offset:sample_offset + num_augmentations] = 0
-                y_train[sample_offset:sample_offset + num_augmentations] = label_idx
-                sample_offset += num_augmentations
+                pooler_output = torch.zeros(num_augmentations, 2048, 1, 1)
+                X_list.append(pooler_output)
+                y_list.append(torch.full((num_augmentations,), label_idx, dtype=torch.long))
                 continue
 
             try:
@@ -193,25 +207,31 @@ def train_model():
                 h = model.resnet.encoder.stages[3](h)
                 pooler_output = model.resnet.pooler(h)  # shape (20, 2048, 1, 1)
 
-                X_train[sample_offset:sample_offset + num_augmentations] = pooler_output.cpu()
-                y_train[sample_offset:sample_offset + num_augmentations] = label_idx
-                sample_offset += num_augmentations
+                # Save extracted feature tensor to cache
+                torch.save(pooler_output.cpu(), feature_path)
 
-                if (idx + 1) % 30 == 0 or (idx + 1) == num_classes:
-                    print(f"Extracted features for {idx + 1}/{num_classes} instruments...", flush=True)
+                X_list.append(pooler_output.cpu())
+                y_list.append(torch.full((num_augmentations,), label_idx, dtype=torch.long))
+
+                if (idx + 1) % 30 == 0 or (idx + 1) == total_database_rows:
+                    print(f"Extracted features for {idx + 1}/{total_database_rows} instruments...", flush=True)
 
             except Exception as e:
                 print(f"Error extracting features for {cls_id}: {e}", flush=True)
-                X_train[sample_offset:sample_offset + num_augmentations] = 0
-                y_train[sample_offset:sample_offset + num_augmentations] = label_idx
-                sample_offset += num_augmentations
+                pooler_output = torch.zeros(num_augmentations, 2048, 1, 1)
+                X_list.append(pooler_output)
+                y_list.append(torch.full((num_augmentations,), label_idx, dtype=torch.long))
 
-    # Trim to actual samples
-    X_train = X_train[:sample_offset]
-    y_train = y_train[:sample_offset]
+    # Concatenate features and labels
+    if X_list:
+        X_train = torch.cat(X_list, dim=0)
+        y_train = torch.cat(y_list, dim=0)
+    else:
+        X_train = torch.empty(0, 2048, 1, 1)
+        y_train = torch.empty(0, dtype=torch.long)
 
     extraction_time = time.time() - t_start
-    print(f"\nFeature extraction completed in {extraction_time:.1f}s!", flush=True)
+    print(f"\nFeature extraction/loading completed in {extraction_time:.1f}s!", flush=True)
     print(f"Feature tensor shape: {X_train.shape} | Labels shape: {y_train.shape}", flush=True)
 
     # ===================================================================

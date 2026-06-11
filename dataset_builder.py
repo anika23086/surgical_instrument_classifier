@@ -1388,7 +1388,7 @@ def build_unified_dataset():
     
     # 1. Identify logo hashes from the original catalog to ignore recurring background templates
     print("Identifying template/logo hashes...")
-    doc = fitz.open(project_dir / "surgical-instrument-catalog.pdf")
+    doc = fitz.open(project_dir / "catalogs" / "surgical-instrument-catalog.pdf")
     hash_counter = {}
     for page_num in range(len(doc)):
         page = doc[page_num]
@@ -1408,26 +1408,26 @@ def build_unified_dataset():
     
     # 2. Parse Catalogs
     surgical_metadata = parse_surgical_catalog(
-        project_dir / "surgical-instrument-catalog.pdf", 
+        project_dir / "catalogs" / "surgical-instrument-catalog.pdf", 
         out_images_dir, 
         logo_hashes
     )
     
     ophthalmic_metadata = parse_ophthalmic_catalog(
-        project_dir / "ophthalmic-instruments-catalog.pdf", 
+        project_dir / "catalogs" / "ophthalmic-instruments-catalog.pdf", 
         out_images_dir, 
         logo_hashes,
         surgical_metadata
     )
     
     medical_rubber_metadata = parse_medical_rubber_catalog(
-        project_dir / "medical-rubber-products.pdf", 
+        project_dir / "catalogs" / "medical-rubber-products.pdf", 
         out_images_dir, 
         logo_hashes
     )
 
     hospital_furniture_metadata = parse_hospital_furniture_catalog(
-        project_dir / "hospital-furniture.pdf",
+        project_dir / "catalogs" / "hospital-furniture.pdf",
         out_images_dir,
         logo_hashes
     )
@@ -1437,7 +1437,7 @@ def build_unified_dataset():
     
     # Parse new catalogs sequentially, passing cumulative master_metadata for SKU unification
     hospital_holloware_metadata = parse_hospital_holloware_catalog(
-        project_dir / "hospital-holloware.pdf",
+        project_dir / "catalogs" / "hospital-holloware.pdf",
         out_images_dir,
         logo_hashes,
         master_metadata
@@ -1445,7 +1445,7 @@ def build_unified_dataset():
     master_metadata = master_metadata + hospital_holloware_metadata
     
     height_weight_scales_metadata = parse_height_weight_scales_catalog(
-        project_dir / "height-and-weight-scales.pdf",
+        project_dir / "catalogs" / "height-and-weight-scales.pdf",
         out_images_dir,
         logo_hashes,
         master_metadata
@@ -1453,7 +1453,7 @@ def build_unified_dataset():
     master_metadata = master_metadata + height_weight_scales_metadata
     
     autoclave_sterilizer_metadata = parse_autoclave_sterilizer_catalog(
-        project_dir / "autoclave-sterilizer.pdf",
+        project_dir / "catalogs" / "autoclave-sterilizer.pdf",
         out_images_dir,
         logo_hashes,
         master_metadata

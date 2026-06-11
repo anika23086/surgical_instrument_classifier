@@ -24,6 +24,21 @@
                 </div>
                 <h1>SURGICAL<span>VISION.AI</span></h1>
             </div>
+            <!-- Header Navigation -->
+            <nav class="header-nav">
+                <button class="nav-btn active" id="navBtnScanner" data-target="scannerSection">
+                    <i data-lucide="scan-eye"></i>
+                    <span>Scan Tool</span>
+                </button>
+                <button class="nav-btn" id="navBtnIngestion" data-target="ingestionSection">
+                    <i data-lucide="file-up"></i>
+                    <span>Add New Catalog</span>
+                </button>
+                <button class="nav-btn" id="navBtnDatabase" data-target="databaseSection">
+                    <i data-lucide="database"></i>
+                    <span>Search Instruments</span>
+                </button>
+            </nav>
             <div class="system-status">
                 <span class="status-indicator"></span>
                 <span class="status-text">Index Cached: 357 Instruments</span>
@@ -33,7 +48,7 @@
 
     <main class="app-container">
         <!-- Classification Section -->
-        <section class="dashboard-grid">
+        <section class="dashboard-grid" id="scannerSection">
             
             <!-- Left Panel: Upload & Controls -->
             <div class="panel glass-panel upload-panel">
@@ -164,8 +179,202 @@
             </div>
         </section>
 
+        <!-- Catalog Ingestion Section -->
+        <section class="catalog-upload-section" id="ingestionSection">
+            <div class="catalog-upload-panel">
+                <div class="upload-section-header">
+                    <div class="title-area">
+                        <h2>Automated Catalog Ingestion</h2>
+                    </div>
+                    <button class="settings-btn" id="settingsBtn" title="Groq API Key Settings">
+                        <i data-lucide="settings"></i>
+                    </button>
+                </div>
+                <p class="panel-description">Upload any medical instrument catalog PDF to automatically extract tools, verify AI predictions, and retrain the classifier.</p>
+
+                <!-- API Key Settings -->
+                <div class="api-key-setup hidden" id="apiKeySetup">
+                    <i data-lucide="key" class="key-icon" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 0.8rem;"></i>
+                    <h3>Enter Groq API Key</h3>
+                    <p style="margin-bottom: 1.2rem;">To start automated ingestion, please provide a Groq API Key. It will be saved locally.</p>
+                    
+                    <div class="settings-form-grid">
+                        <div class="form-group">
+                            <label for="apiKeyInput">Groq API Key</label>
+                            <input type="password" id="apiKeyInput" placeholder="gsk_...">
+                        </div>
+                        <button class="btn-save-key" id="saveKeyBtn">Save Key</button>
+                    </div>
+                    
+                    <div class="api-key-help" style="margin-top: 1.2rem;">
+                        <a href="https://console.groq.com/keys" target="_blank">
+                            <i data-lucide="external-link"></i> Get a free API key from Groq Console
+                        </a>
+                    </div>
+                </div>
+
+                <!-- PDF Dropzone -->
+                <div class="pdf-dropzone" id="pdfDropzone">
+                    <input type="file" id="pdfFileInput" accept="application/pdf" class="pdf-file-input">
+                    <i data-lucide="file-up" class="upload-icon"></i>
+                    <h3>Drag & Drop Catalog PDF</h3>
+                    <p>Supports PDFs up to 100 pages</p>
+                    <button class="btn btn-secondary select-btn">Browse PDF</button>
+                </div>
+
+                <!-- Pipeline Progress Stepper (hidden by default) -->
+                <div class="pipeline-progress hidden" id="pipelineProgress">
+                    <div class="pipeline-stepper">
+                        <div class="stepper-step active" id="step-1">
+                            <div class="step-dot">1</div>
+                            <span class="step-label">Upload</span>
+                        </div>
+                        <div class="step-connector" id="connector-1"></div>
+                        <div class="stepper-step" id="step-2">
+                            <div class="step-dot">2</div>
+                            <span class="step-label">AI Analysis</span>
+                        </div>
+                        <div class="step-connector" id="connector-2"></div>
+                        <div class="stepper-step" id="step-3">
+                            <div class="step-dot">3</div>
+                            <span class="step-label">Review & Edit</span>
+                        </div>
+                        <div class="step-connector" id="connector-3"></div>
+                        <div class="stepper-step" id="step-4">
+                            <div class="step-dot">4</div>
+                            <span class="step-label">Train Model</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-status-text" id="pipelineStatusText">
+                        Preparing catalog upload...
+                    </div>
+                </div>
+
+                <!-- Review Section (hidden by default) -->
+                <div class="review-section hidden" id="reviewSection">
+                    <div class="review-header">
+                        <h3>Verify Extracted Instruments</h3>
+                        <div class="review-badge" id="reviewBadge">
+                            <i data-lucide="check-circle-2"></i>
+                            <span id="reviewBadgeText">0 items detected</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Side-by-side Review Split View -->
+                    <div class="review-split-container">
+                        <!-- Left Panel: PDF Viewer -->
+                        <div class="review-pdf-panel">
+                            <div class="pdf-viewer-header">
+                                <i data-lucide="file-text" style="width: 18px; height: 18px; color: var(--accent-cyan);"></i>
+                                <span id="pdfViewerTitle">Source Catalog PDF</span>
+                            </div>
+                            <div class="pdf-viewer-body">
+                                <iframe id="reviewPdfViewer" src="" width="100%" height="100%"></iframe>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Cards Grid & Ingestion Controls -->
+                        <div class="review-content-panel">
+                            <div class="review-grid" id="reviewGrid">
+                                <!-- Populated dynamically -->
+                            </div>
+
+                            <button class="add-item-link" id="addItemLink">
+                                <i data-lucide="plus"></i> Add Missing Item
+                            </button>
+
+                            <!-- Add Item Form (hidden by default) -->
+                            <div class="add-item-form hidden" id="addItemForm">
+                                <div class="form-group">
+                                    <label for="addName">Instrument Name</label>
+                                    <input type="text" id="addName" placeholder="e.g. Adson Forceps">
+                                </div>
+                                <div class="form-group">
+                                    <label for="addSku">SKU</label>
+                                    <input type="text" id="addSku" placeholder="e.g. 12345">
+                                </div>
+                                <div class="form-group">
+                                    <label for="addCategory">Category</label>
+                                    <select id="addCategory">
+                                        <option value="Surgical Forceps">Forceps</option>
+                                        <option value="Surgical Scissors">Scissors</option>
+                                        <option value="Surgical Retractors">Retractors</option>
+                                        <option value="Clamps">Clamps</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="addImg">Image File</label>
+                                    <input type="file" id="addImg" accept="image/*">
+                                </div>
+                                <button class="btn btn-primary" id="saveAddedItemBtn">Add</button>
+                            </div>
+
+                            <div class="pipeline-action-bar">
+                                <div class="action-bar-info">
+                                    <span class="count-badge" id="actionBarCount">0 items ready</span>
+                                </div>
+                                <div class="action-bar-buttons">
+                                    <button class="btn-cancel" id="btnCancelIngestion">
+                                        <i data-lucide="x-circle"></i> Cancel
+                                    </button>
+                                    <button class="btn-approve" id="btnApproveIngestion">
+                                        <i data-lucide="play"></i> Approve & Train
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Training Progress (hidden by default) -->
+                <div class="training-progress-section hidden" id="trainingProgressSection">
+                    <h3>Training ResNet-50 Classifier</h3>
+                    <div class="training-progress-bar">
+                        <div class="training-progress-fill" id="trainingProgressFill" style="width: 0%;"></div>
+                    </div>
+                    <div class="training-epoch-text" id="trainingEpochText">
+                        Starting epoch <span class="epoch-highlight">0/50</span>...
+                    </div>
+                </div>
+
+                <!-- Pipeline Complete State (hidden by default) -->
+                <div class="pipeline-complete hidden" id="pipelineComplete">
+                    <div class="success-icon">
+                        <i data-lucide="check"></i>
+                    </div>
+                    <h3>Ingestion Complete!</h3>
+                    <p id="pipelineCompleteMsg">12 new instruments have been processed, cataloged, and integrated into SurgicalVision.AI.</p>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-value" id="statNewCount">0</span>
+                            <span class="stat-label">New Instruments</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="statElapsed">0s</span>
+                            <span class="stat-label">Elapsed Time</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 2rem;">
+                        <button class="btn btn-primary" id="btnDismissPipeline">Done</button>
+                    </div>
+                </div>
+
+                <!-- Error panel (hidden by default) -->
+                <div class="pipeline-error hidden" id="pipelineError">
+                    <i data-lucide="alert-triangle" class="error-icon"></i>
+                    <h3>Pipeline Error</h3>
+                    <p id="pipelineErrorMsg">An error occurred during pipeline execution.</p>
+                    <div style="margin-top: 1.5rem;">
+                        <button class="btn btn-primary" id="btnDismissError">Back to Upload</button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
         <!-- Catalog Section -->
-        <section class="catalog-section">
+        <section class="catalog-section" id="databaseSection">
             <div class="section-header">
                 <div class="title-area">
                     <i data-lucide="database" class="icon-cyan"></i>
@@ -239,6 +448,19 @@
                         <i data-lucide="search-code"></i> Query Similar Items
                     </button>
                 </div>
+            </div>
+        </div>
+    </dialog>
+    
+    <!-- Dialog for Image Preview (Review Screen Lightbox) -->
+    <dialog id="imagePreviewDialog" class="glass-dialog image-preview-dialog">
+        <div class="dialog-content preview-dialog-content">
+            <button class="dialog-close-btn" id="previewDialogCloseBtn" title="Close preview">
+                <i data-lucide="x"></i>
+            </button>
+            <div class="preview-dialog-body">
+                <img id="previewDialogImg" src="" alt="Enlarged Instrument Preview">
+                <div class="preview-dialog-meta" id="previewDialogMeta"></div>
             </div>
         </div>
     </dialog>
